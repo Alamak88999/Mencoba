@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player dengan Rekaman</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        h1 {
+            text-align: center;
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
+            margin: 10px auto;
+            display: block;
+            font-size: 16px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+        #search-results {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .song-item {
+            padding: 10px;
+            background-color: #fff;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 80%;
+            text-align: center;
+        }
+        .song-item:hover {
+            background-color: #e0e0e0;
+        }
+
+        #audio-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .control-btn {
+            margin: 0 10px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        #volume-control {
+            width: 100px;
+        }
+
+        #player {
+            margin: 20px auto;
+            width: 640px;
+            height: 360px;
+        }
+
+        /* Tombol Rekam dan Download */
+        #record-btn, #download-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #record-btn:hover, #download-btn:hover {
+            background-color: #45a049;
+        }
+
+        #stop-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #FF5733;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Music Player dengan Rekaman</h1>
+
+    <!-- Input untuk pencarian lagu -->
+    <input type="text" id="search-input" placeholder="Cari lagu..." oninput="searchSongs()">
+    
+    <!-- Daftar hasil pencarian -->
+    <div id="search-results"></div>
+
+    <!-- Kontrol Pemutaran Audio -->
+    <div id="audio-controls">
+        <span class="control-btn" id="play-btn">► Play</span>
+        <span class="control-btn" id="pause-btn" style="display:none;">⏸ Pause</span>
+        <input type="range" id="volume-control" min="0" max="100" value="100">
+    </div>
+
+    <!-- Tempat untuk video -->
+    <div id="video-container">
+        <div id="player"></div>
+    </div>
+
+    <!-- Tombol untuk merekam video -->
+    <button id="record-btn" onclick="startRecording()">Mulai Rekam</button>
+    <button id="stop-btn" style="display:none;" onclick="stopRecording()">Stop Rekam</button>
+    <button id="download-btn" style="display:none;" onclick="downloadRecording()">Unduh Rekaman</button>
+
+    <script>
+        var player;
+        var currentVideoId = '';
+        var isPlaying = false;
+
+        var mediaRecorder;
+        var recordedChunks = [];
+        var stream;
+
+        // Load API YouTube
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                height: '360',
+                width: '640',
+                videoId: '',
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data == YT.PlayerState.ENDED) {
+                isPlaying = false;
+                document.getElementById('play-btn').style.display = 'inline';
+                document.getElementById('pause-btn').style.display = 'none';
+            }
+        }
+
+        function searchSongs() {
+            var query = document.getElementById('search-input').value;
+            if (query.length < 3) {
+                document.getElementById('search-results').innerHTML = '';
+                return;
+            }
+
+            var apiKey = 'AIzaSyC7GuaAhAR08e4M5y-l3mJP_E4b3HYTt1A'; // Ganti dengan API Key Anda
+            var url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&type=video&key=${apiKey}`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    var results = data.items;
+                    displayResults(results);
+                });
+        }
+
+        function displayResults(results) {
+            var resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '';
+
+            results.forEach(item => {
+                var videoId = item.id.videoId;
+                var title = item.snippet.title;
+                var thumbnail = item.snippet.thumbnails.default.url;
+
+                var songItem = document.createElement('div');
+                songItem.classList.add('song-item');
+                songItem.innerHTML = `<img src="${thumbnail}" alt="${title}" width="50" height="50"> <p>${title}</p>`;
+
+                songItem.addEventListener('click', () => playSong(videoId));
+
+                resultsDiv.appendChild(songItem);
+            });
+        }
+
+        function playSong(videoId) {
+            if (currentVideoId !== videoId) {
+                currentVideoId = videoId;
+                player.loadVideoById(videoId);
+                player.playVideo();
+
+                document.getElementById('play-btn').style.display = 'none';
+                document.getElementById('pause-btn').style.display = 'inline';
+                isPlaying = true;
+            }
+        }
+
+        function pauseVideo() {
+            if (isPlaying) {
+                player.pauseVideo();
+                document.getElementById('play-btn').style.display = 'inline';
+                document.getElementById('pause-btn').style.display = 'none';
+                isPlaying = false;
+            }
+        }
+
+        function setVolume() {
+            var volume = document.getElementById('volume-control').value;
+            player.setVolume(volume);
+        }
+
+        // Start recording
+        function startRecording() {
+            stream = document.getElementById('player').getElementsByTagName('iframe')[0].contentWindow;
+            var videoStream = stream.document.createElement('canvas');
+            var mediaStream = videoStream.captureStream();
+            mediaRecorder = new MediaRecorder(mediaStream);
+
+            mediaRecorder.ondataavailable = function(e) {
+                recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = function() {
+                var blob = new Blob(recordedChunks, { type: 'video/webm' });
+                var url = URL.createObjectURL(blob);
+                document.getElementById('download-btn').href = url;
+                document.getElementById('download-btn').style.display = 'inline';
+            };
+
+            mediaRecorder.start();
+            document.getElementById('record-btn').style.display = 'none';
+            document.getElementById('stop-btn').style.display = 'inline';
+        }
+
+        // Stop recording
+        function stopRecording() {
+            mediaRecorder.stop();
+            document.getElementById('stop-btn').style.display = 'none';
+        }
+
+        // Download recording
+        function downloadRecording() {
+            var link = document.createElement('a');
+            link.href = document.getElementById('download-btn').href;
+            link.download = 'rekaman-video.webm';
+            link.click();
+        }
+
+        document.getElementById('play-btn').addEventListener('click', () => playSong(currentVideoId));
+        document.getElementById('pause-btn').addEventListener('click', pauseVideo);
+        document.getElementById('volume-control').addEventListener('input', setVolume);
+
+        var script = document.createElement('script');
+        script.src = "https://www.youtube.com/iframe_api";
+        document.body.appendChild(script);
+    </script>
+
+</body>
+</html>
